@@ -29,6 +29,8 @@ def train_sort(**kwargs):
 
     root_dir = os.path.join(CHECKPOINT_PATH, "Sorting")
     os.makedirs(root_dir,exist_ok=True)
+    train_loader,val_loader,test_loader = kwargs.pop("train_loader"), kwargs.pop("val_loader"),kwargs.pop('test_loader')
+
     trainer = pl.Trainer(
         default_root_dir = root_dir,
         accelerator = "gpu" if torch.cuda.is_available() else "cpu",
@@ -36,13 +38,12 @@ def train_sort(**kwargs):
         max_epochs = 10,
         gradient_clip_val = 5, 
     )
-    trainer.logger._default_hp_metric = None
 
     model = Sorter(**kwargs)
-    trainer.fit(model, kwargs["train_loader"], kwargs["val_loader"])
+    trainer.fit(model, train_loader,val_loader)
 
-    val_result = trainer.test(model, kwargs["val_loader"],verbose=False)
-    test_result = trainer.test(model, kwargs["test_loadet"], verbose=False)
+    val_result = trainer.test(model, val_loader,verbose=False)
+    test_result = trainer.test(model, test_loader,verbose=False)
     result = {"test_acc": test_result[0]["test_acc"], "val_acc": val_result[0]["test_acc"]}
 
     return model, result
@@ -50,7 +51,7 @@ def train_sort(**kwargs):
 
 if __name__ == "__main__":
 
-    dataset = partial(SortingDataset, 10, 16)
+    dataset = partial(SortingDataset, 100, 16)
     train_loader = data.DataLoader(dataset(50000), batch_size=128, shuffle=True, drop_last=True, pin_memory=True)
     val_loader   = data.DataLoader(dataset(1000), batch_size=128)
     test_loader  = data.DataLoader(dataset(10000), batch_size=128)
@@ -60,13 +61,16 @@ if __name__ == "__main__":
     print("Labels:    ", labels)
 
     reverse_model, reverse_result = train_sort(input_dim=train_loader.dataset.num_categories,
-                                              model_dim=32,
-                                              num_heads=1,
+                                              model_dim=64,
+                                              num_heads=2,
                                               num_classes=train_loader.dataset.num_categories,
-                                              num_layers=1,
-                                              dropout=0.0,
-                                              lr=5e-4,
-                                              warmup=50)
+                                              num_layers=4,
+                                              dropout=0.1,
+                                              lr=1e-3,
+                                              max_iters=10 * len(train_loader),
+                                              train_loader=train_loader,
+                                              val_loader= val_loader,
+                                              test_loader=test_loader)
     
     print(f"Val accuracy:  {(100.0 * reverse_result['val_acc']):4.2f}%")
     print(f"Test accuracy: {(100.0 * reverse_result['test_acc']):4.2f}%")

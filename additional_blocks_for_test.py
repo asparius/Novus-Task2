@@ -8,7 +8,11 @@ class TransformerEncoder(nn.Module):
 
     def __init__(self, num_layers, **block_args):
         super().__init__()
-        self.layers = nn.ModuleList([EncoderBlock(**block_args) for _ in range(num_layers)])
+        d_dim = block_args.pop("input_dim")
+        num_heads = block_args.pop("num_heads")
+        d_ff = block_args.pop("dim_feedforward")
+        dropout = block_args.pop("dropout")
+        self.layers = nn.ModuleList([EncoderBlock(d_dim=d_dim,num_heads=num_heads,d_ff=d_ff,dropout=dropout) for _ in range(num_layers)])
 
     
     def forward(self, x, mask=None):
@@ -55,7 +59,7 @@ class PositionalEncoding(nn.Module):
 
 class Sorter(pl.LightningModule):
 
-    def __init__(self, input_dim, model_dim, num_classes, n, num_heads, num_layers, lr,dropout,input_dropout,epochs):
+    def __init__(self, input_dim, model_dim, num_classes, num_heads, num_layers, lr,max_iters,dropout=0.0,input_dropout=0.0):
 
         super().__init__()
         self.save_hyperparameters()
@@ -105,7 +109,7 @@ class Sorter(pl.LightningModule):
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,last_epoch=self.hparams.epochs)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,self.hparams.max_iters)
 
         return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
     
@@ -124,6 +128,9 @@ class Sorter(pl.LightningModule):
     
     def training_step(self,batch,batch_idx):
         loss,_ = self.calculate_loss(batch,mode="train")
+        self.log("my_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
 
     def validation_step(self, batch,batch_idx):
         _ = self.calculate_loss(batch, mode="val")
